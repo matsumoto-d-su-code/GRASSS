@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カード探索ゲーム ― 探索アルゴリズム入門</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDMincho:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt-dark:#0a3327;
+    --felt:#0f4a37;
+    --felt-light:#186e51;
+    --gold:#c9a648;
+    --gold-light:#f0d888;
+    --gold-dim:#8a7132;
+    --cream:#f4ecd8;
+    --ink:#211a12;
+    --red:#b23a42;
+    --black:#1a1611;
+    --wrong:#5c6660;
+    --shadow: 0 18px 40px rgba(0,0,0,.45);
+    --back-a: var(--gold-dim);
+    --back-b: #7c2430;
+    --mode-binary: #3f7ea6;
+    --mode-binary-light: #86c2e6;
+  }
+  body.binary-mode{
+    --back-a: #2c5a72;
+    --back-b: #123247;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    min-height:100vh;
+    font-family:'BIZ UDGothic', sans-serif;
+    color:var(--cream);
+    background:
+      radial-gradient(ellipse at 50% -10%, rgba(255,255,255,.06), transparent 55%),
+      repeating-linear-gradient(45deg, rgba(255,255,255,.015) 0 2px, transparent 2px 8px),
+      radial-gradient(circle at 50% 40%, var(--felt) 0%, var(--felt-dark) 72%, #06251c 100%);
+    display:flex;
+    justify-content:center;
+    padding: 32px 16px 64px;
+  }
+  .table{
+    width:100%;
+    max-width:900px;
+  }
+  header{
+    text-align:center;
+    margin-bottom:28px;
+  }
+  .eyebrow{
+    font-family:'BIZ UDGothic', sans-serif;
+    font-size:12px;
+    letter-spacing:.28em;
+    color:var(--gold-light);
+    text-transform:uppercase;
+    opacity:.85;
+  }
+  h1{
+    font-family:'BIZ UDMincho', serif;
+    font-weight:800;
+    font-size:clamp(28px, 5vw, 44px);
+    margin:8px 0 6px;
+    letter-spacing:.04em;
+    text-shadow: 0 2px 12px rgba(0,0,0,.4);
+  }
+  h1 .suit{ color: var(--gold-light); }
+  .lead{
+    font-size:14px;
+    color: rgba(244,236,216,.75);
+    max-width:560px;
+    margin:0 auto;
+    line-height:1.7;
+  }
+
+  .panel{
+    background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+    border:1px solid rgba(201,166,72,.35);
+    border-radius:16px;
+    padding:18px 20px;
+    margin-bottom:18px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  }
+
+  /* ---- controls ---- */
+  .controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:18px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .control-group label.title{
+    display:block;
+    font-family:'BIZ UDGothic', sans-serif;
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--gold-light);
+    margin-bottom:8px;
+  }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    font-family:'BIZ UDGothic', sans-serif;
+    font-size:13px;
+    font-weight:700;
+    color:var(--cream);
+    background: rgba(255,255,255,.06);
+    border:1px solid rgba(201,166,72,.4);
+    border-radius:8px;
+    padding:7px 10px;
+    cursor:pointer;
+    transition: all .15s ease;
+    min-width:40px;
+  }
+  .chip:hover{ background: rgba(201,166,72,.22); }
+  .chip.active{
+    background: linear-gradient(180deg, var(--gold-light), var(--gold));
+    color: var(--ink);
+    border-color: var(--gold-light);
+    box-shadow: 0 3px 10px rgba(0,0,0,.35);
+  }
+  .chip.mode-chip{ font-size:13.5px; padding:9px 14px; }
+  .chip.mode-chip.active[data-mode="binary"]{
+    background: linear-gradient(180deg, var(--mode-binary-light), var(--mode-binary));
+    color: #0b2430;
+    border-color: var(--mode-binary-light);
+  }
+  .newgame-btn{
+    font-family:'BIZ UDGothic', sans-serif;
+    font-weight:700;
+    font-size:14px;
+    color:var(--ink);
+    background: linear-gradient(180deg, var(--gold-light), var(--gold));
+    border:1px solid var(--gold-light);
+    border-radius:10px;
+    padding:11px 20px;
+    cursor:pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.35);
+    transition: transform .12s ease;
+    white-space:nowrap;
+  }
+  .newgame-btn:hover{ transform: translateY(-1px); }
+  .newgame-btn:active{ transform: translateY(0); }
+
+  /* ---- target + counter row ---- */
+  .status-row{
+    display:flex;
+    gap:16px;
+    flex-wrap:wrap;
+    align-items:stretch;
+  }
+  .status-row .panel{ flex:1 1 280px; margin-bottom:0; display:flex; align-items:center; gap:16px;}
+  .target-label{ flex-shrink:0; }
+  .target-label .title{ margin-bottom:10px; }
+  .target-caption{
+    font-family:'BIZ UDMincho', serif;
+    font-size:16px;
+    font-weight:700;
+    color:var(--gold-light);
+    margin-top:8px;
+    text-align:center;
+  }
+
+  .counter-panel{ flex:0 0 220px; flex-direction:column; align-items:flex-start; justify-content:center;}
+  .odometer{
+    display:flex;
+    gap:5px;
+    margin-top:4px;
+  }
+  .digit{
+    font-family:'BIZ UDGothic', sans-serif;
+    font-weight:700;
+    font-size:30px;
+    width:34px;
+    text-align:center;
+    background: rgba(0,0,0,.35);
+    border:1px solid rgba(201,166,72,.5);
+    border-radius:6px;
+    padding:6px 0;
+    color: var(--gold-light);
+    box-shadow: inset 0 2px 6px rgba(0,0,0,.5);
+  }
+  .counter-unit{ font-size:12px; color:rgba(244,236,216,.6); margin-top:6px; }
+
+  /* ---- playing card component ---- */
+  .card-shell{
+    width:72px;
+    aspect-ratio: 5 / 7;
+    perspective: 700px;
+  }
+  .card-shell.large{ width:96px; }
+  .card-inner{
+    position:relative;
+    width:100%; height:100%;
+    transform-style:preserve-3d;
+    transition: transform .5s cubic-bezier(.22,.68,.35,1.15);
+  }
+  .card-shell.flipped .card-inner{ transform: rotateY(180deg); }
+
+  .face{
+    position:absolute; inset:0;
+    border-radius:8px;
+    backface-visibility:hidden;
+    box-shadow: var(--shadow);
+  }
+  .face-back{
+    background:
+      repeating-linear-gradient(45deg, var(--back-a) 0 4px, var(--back-b) 4px 9px);
+    border:2px solid var(--gold-light);
+    display:flex; align-items:center; justify-content:center;
+    transition: background .3s ease;
+  }
+  .face-back::after{
+    content:"";
+    width:60%; height:60%;
+    border:2px solid var(--gold-light);
+    border-radius:50%;
+    opacity:.55;
+  }
+  .face-front{
+    transform: rotateY(180deg);
+    background: var(--cream);
+    border:2px solid var(--gold);
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    padding:4px 5px;
+    color: var(--ink);
+  }
+  .face-front.red{ color: var(--red); }
+  .face-front.black{ color: var(--black); }
+  .corner{
+    font-family:'BIZ UDGothic', sans-serif;
+    font-weight:700;
+    font-size: clamp(8px, 2.6vw, 12px);
+    line-height:1;
+    text-align:center;
+  }
+  .corner.bottom{ align-self:flex-end; transform: rotate(180deg); }
+  .center-suit{
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    font-size: clamp(14px, 5.5vw, 26px);
+  }
+  .card-shell.large .corner{ font-size:15px; }
+  .card-shell.large .center-suit{ font-size:34px; }
+
+  /* grid card states */
+  .card-shell{ cursor:pointer; }
+  .card-shell.checked{ cursor:default; }
+  .card-shell.checked.wrong .face-front{ filter:grayscale(65%); opacity:.55; }
+  .card-shell.checked.wrong::after{
+    content:"×";
+    position:absolute; top:-6px; right:-6px;
+    width:20px; height:20px;
+    background: var(--wrong);
+    color:#fff;
+    border-radius:50%;
+    font-size:13px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);
+  }
+  .card-shell.correct .face-front{
+    border-color: var(--gold-light);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ box-shadow: 0 0 0 rgba(240,216,136,.0), var(--shadow); }
+    50%{ box-shadow: 0 0 22px rgba(240,216,136,.85), var(--shadow); }
+  }
+  .card-shell.disabled{ pointer-events:none; opacity:.55; }
+  .card-shell{ position:relative; }
+  .card-shell:focus-visible .card-inner{ outline:2px solid var(--gold-light); outline-offset:3px; border-radius:8px; }
+
+  .hint-badge{
+    position:absolute; top:-8px; left:-8px;
+    width:20px; height:20px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700;
+    color:#fff;
+    box-shadow:0 2px 6px rgba(0,0,0,.4);
+    z-index:2;
+  }
+  .hint-badge.up{ background: var(--mode-binary-light); color:#0b2430; }
+  .hint-badge.down{ background:#9a5252; }
+
+  /* ---- grid (array-style single row, always fits without scrolling) ---- */
+  .grid-panel .title{ margin-bottom:4px; }
+  .grid-hint{
+    font-size:11.5px;
+    color: rgba(244,236,216,.5);
+    margin-bottom:12px;
+  }
+  .grid{
+    display:grid;
+    gap: clamp(4px, 1.2vw, 8px);
+    padding:6px 2px 10px;
+    margin:0 auto;
+    justify-content:center;
+  }
+  .card-slot{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    width:100%;
+    min-width:0;
+  }
+  .card-shell{ width:100%; min-width:0; }
+  .index-label{
+    font-family:'BIZ UDGothic', sans-serif;
+    font-size: clamp(8px, 2.4vw, 11px);
+    font-weight:700;
+    color: rgba(240,216,136,.75);
+    margin-top:6px;
+  }
+
+  /* ---- message ---- */
+  .message{
+    margin-top:16px;
+    font-size:14px;
+    line-height:1.8;
+    color: var(--cream);
+    text-align:center;
+    min-height:24px;
+  }
+  .message .highlight{
+    color: var(--gold-light);
+    font-weight:700;
+  }
+  .message .note{
+    display:block;
+    margin-top:6px;
+    font-size:12.5px;
+    color: rgba(244,236,216,.65);
+  }
+
+  footer{
+    text-align:center;
+    font-size:11px;
+    color: rgba(244,236,216,.4);
+    margin-top:24px;
+    font-family:'BIZ UDGothic', sans-serif;
+    letter-spacing:.05em;
+  }
+
+  @media (max-width:520px){
+    .status-row .panel{ flex-direction:column; align-items:flex-start; }
+    .counter-panel{ flex-basis:auto; width:100%; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .card-inner{ transition:none; }
+    .card-shell.correct .face-front{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div class="table">
+
+  <header>
+    <div class="eyebrow">情報Ⅰ・探索アルゴリズム入門</div>
+    <h1>トランプ<span class="suit">探索</span>ゲーム</h1>
+    <p class="lead">裏返しのカードを1枚ずつめくって、指定されたカード（数）を探し出そう。モードを切り替えて、線形探索と二分探索の違いを見つかるまでの回数で比べてみよう。</p>
+  </header>
+
+  <div class="panel controls">
+    <div class="control-group">
+      <label class="title">モード</label>
+      <div class="chip-row" id="modeChips"></div>
+    </div>
+    <div class="control-group">
+      <label class="title">① カードの枚数</label>
+      <div class="chip-row" id="countChips"></div>
+    </div>
+    <button class="newgame-btn" id="newGameBtn">🔄 新しいゲームを始める</button>
+  </div>
+
+  <div class="status-row">
+    <div class="panel target-label">
+      <div>
+        <label class="title">② 探すカード</label>
+        <div class="card-shell large flipped" id="targetCard">
+          <div class="card-inner">
+            <div class="face face-back"></div>
+            <div class="face face-front" id="targetFace"></div>
+          </div>
+        </div>
+        <div class="target-caption" id="targetCaption">-</div>
+      </div>
+    </div>
+    <div class="panel counter-panel">
+      <label class="title">③ 探索回数</label>
+      <div class="odometer" id="counterDigits"></div>
+      <div class="counter-unit">回めくりました</div>
+    </div>
+  </div>
+
+  <div class="panel grid-panel">
+    <label class="title">④ 場のカード（クリックしてめくる）</label>
+    <div class="grid-hint" id="gridHint"></div>
+    <div class="grid" id="grid"></div>
+    <div class="message" id="message" aria-live="polite"></div>
+  </div>
+
+  <footer>SEARCH ALGORITHM DEMO — 情報Ⅰ 授業用教材</footer>
+</div>
+
+<script>
+(function(){
+  const SUITS = [
+    {sym:'♠', name:'スペード', color:'black'},
+    {sym:'♥', name:'ハート', color:'red'},
+    {sym:'♦', name:'ダイヤ', color:'red'},
+    {sym:'♣', name:'クラブ', color:'black'},
+  ];
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const RANK_LABEL = {A:'エース', J:'ジャック', Q:'クイーン', K:'キング'};
+
+  const COUNT_OPTIONS = [5,6,7,8,9,10,11,12,13,14];
+  let currentCount = 8;
+  let currentMode = 'linear'; // 'linear' | 'binary'
+
+  let cards = [];       // cards in play, in grid order
+  let target = null;    // target card object
+  let searchCount = 0;
+  let gameOver = false;
+
+  const gridEl = document.getElementById('grid');
+  const gridHintEl = document.getElementById('gridHint');
+  const messageEl = document.getElementById('message');
+  const targetFaceEl = document.getElementById('targetFace');
+  const targetCaptionEl = document.getElementById('targetCaption');
+  const countChipsEl = document.getElementById('countChips');
+  const modeChipsEl = document.getElementById('modeChips');
+  const counterDigitsEl = document.getElementById('counterDigits');
+
+  function buildFullDeck(){
+    const deck = [];
+    for(const suit of SUITS){
+      for(const rank of RANKS){
+        deck.push({rank, suit: suit.sym, suitName: suit.name, color: suit.color});
+      }
+    }
+    return deck;
+  }
+
+  function buildIntegerDeck(n){
+    const pool = [];
+    for(let i = 1; i <= 99; i++) pool.push(i);
+    const picked = shuffle(pool).slice(0, n);
+    return picked.map(v => ({value: v}));
+  }
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for(let i=a.length-1; i>0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
+  function cardFaceHTML(card){
+    if(currentMode === 'binary'){
+      return `
+        <div class="corner">${card.value}</div>
+        <div class="center-suit">${card.value}</div>
+        <div class="corner bottom">${card.value}</div>
+      `;
+    }
+    return `
+      <div class="corner">${card.rank}<br>${card.suit}</div>
+      <div class="center-suit">${card.suit}</div>
+      <div class="corner bottom">${card.rank}<br>${card.suit}</div>
+    `;
+  }
+
+  function renderCounter(n){
+    const str = String(n).padStart(2,'0');
+    counterDigitsEl.innerHTML = str.split('').map(d => `<span class="digit">${d}</span>`).join('');
+  }
+
+  function renderModeChips(){
+    modeChipsEl.innerHTML = '';
+    const modes = [
+      {id:'linear', label:'🃏 線形探索'},
+      {id:'binary', label:'🔢 二分探索'},
+    ];
+    modes.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'chip mode-chip' + (m.id === currentMode ? ' active' : '');
+      btn.dataset.mode = m.id;
+      btn.textContent = m.label;
+      btn.addEventListener('click', () => {
+        if(currentMode === m.id) return;
+        currentMode = m.id;
+        document.body.classList.toggle('binary-mode', currentMode === 'binary');
+        startGame();
+      });
+      modeChipsEl.appendChild(btn);
+    });
+  }
+
+  function renderCountChips(){
+    countChipsEl.innerHTML = '';
+    COUNT_OPTIONS.forEach(n => {
+      const btn = document.createElement('button');
+      btn.className = 'chip' + (n === currentCount ? ' active' : '');
+      btn.textContent = n + '枚';
+      btn.addEventListener('click', () => {
+        currentCount = n;
+        startGame();
+      });
+      countChipsEl.appendChild(btn);
+    });
+  }
+
+  function startGame(){
+    if(currentMode === 'binary'){
+      const deck = buildIntegerDeck(currentCount);
+      deck.sort((a,b) => a.value - b.value); // 昇順に並び替え
+      cards = deck.map(c => ({...c, revealed:false, wrong:false}));
+    }else{
+      const deck = shuffle(buildFullDeck()).slice(0, currentCount);
+      cards = shuffle(deck).map(c => ({...c, revealed:false, wrong:false}));
+    }
+    target = cards[Math.floor(Math.random()*cards.length)];
+    searchCount = 0;
+    gameOver = false;
+
+    renderModeChips();
+    renderCountChips();
+    renderCounter(0);
+
+    // target display
+    if(currentMode === 'binary'){
+      targetFaceEl.className = 'face face-front';
+      targetFaceEl.innerHTML = cardFaceHTML(target);
+      targetCaptionEl.textContent = `数値 ${target.value} を探そう`;
+      gridHintEl.textContent = 'カードは値の小さい順（昇順）に並んでいます。半分に絞り込む二分探索の説明に使えます。';
+    }else{
+      targetFaceEl.className = 'face face-front ' + target.color;
+      targetFaceEl.innerHTML = cardFaceHTML(target);
+      targetCaptionEl.textContent = `${target.suitName}の${target.rank}${RANK_LABEL[target.rank] ? '（'+RANK_LABEL[target.rank]+'）' : ''}`;
+      gridHintEl.textContent = '配列のように横一列に並んでいます。番号は探索の説明（線形探索）に使えます。';
+    }
+
+    messageEl.innerHTML = currentMode === 'binary'
+      ? 'カードをクリックして、探している数を見つけよう。'
+      : 'カードをクリックして、上のカードを探してみよう。';
+
+    // grid (single horizontal row, array-style with index labels)
+    // Column count matches the number of cards; a max-width cap keeps
+    // cards from growing too large with few cards, while the grid's
+    // own width (bounded by its container) keeps cards from ever
+    // overflowing and needing a horizontal scrollbar.
+    const CARD_MAX_PX = 72;
+    const GAP_PX = 8;
+    gridEl.style.gridTemplateColumns = `repeat(${cards.length}, minmax(0, 1fr))`;
+    gridEl.style.maxWidth = (cards.length * CARD_MAX_PX + (cards.length - 1) * GAP_PX) + 'px';
+
+    gridEl.innerHTML = '';
+    cards.forEach((card, idx) => {
+      const slot = document.createElement('div');
+      slot.className = 'card-slot';
+
+      const shell = document.createElement('div');
+      shell.className = 'card-shell';
+      shell.tabIndex = 0;
+      shell.setAttribute('role','button');
+      shell.setAttribute('aria-label', `${idx+1}番目のカード（裏向き）`);
+      shell.innerHTML = `
+        <div class="card-inner">
+          <div class="face face-back"></div>
+          <div class="face face-front${card.color ? ' ' + card.color : ''}"></div>
+        </div>`;
+      const activate = () => handleClick(idx, shell);
+      shell.addEventListener('click', activate);
+      shell.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); activate(); }
+      });
+
+      const label = document.createElement('div');
+      label.className = 'index-label';
+      label.textContent = idx + 1;
+
+      slot.appendChild(shell);
+      slot.appendChild(label);
+      gridEl.appendChild(slot);
+    });
+  }
+
+  function handleClick(idx, shell){
+    if(gameOver) return;
+    const card = cards[idx];
+    if(card.revealed) return;
+
+    searchCount++;
+    renderCounter(searchCount);
+    card.revealed = true;
+
+    shell.classList.add('flipped');
+    const front = shell.querySelector('.face-front');
+    front.innerHTML = cardFaceHTML(card);
+
+    const isMatch = currentMode === 'binary'
+      ? (card.value === target.value)
+      : (card.rank === target.rank && card.suit === target.suit);
+
+    if(isMatch){
+      gameOver = true;
+      shell.classList.add('correct');
+      shell.setAttribute('aria-label', `${idx+1}番目のカード：正解`);
+      disableRemaining();
+
+      if(currentMode === 'binary'){
+        const maxSteps = Math.floor(Math.log2(currentCount)) + 1;
+        const avgLinear = (currentCount/2).toFixed(1);
+        messageEl.innerHTML = `🎉 見つかった！<span class="highlight">探索回数：${searchCount}回</span>（カード枚数：${currentCount}枚）
+          <span class="note">二分探索は毎回範囲を半分に絞り込むため、最大でも約${maxSteps}回で見つかります。同じ枚数を線形探索すると平均${avgLinear}回かかるのと比べてみよう。</span>`;
+      }else{
+        const avg = (currentCount/2).toFixed(1);
+        messageEl.innerHTML = `🎉 見つかった！<span class="highlight">探索回数：${searchCount}回</span>（カード枚数：${currentCount}枚）
+          <span class="note">この方法は「線形探索」と呼ばれ、1枚ずつ順番に確認します。運が良ければ1回、悪ければ${currentCount}回かかることもあり、平均すると約${avg}回で見つかります。</span>`;
+      }
+    }else{
+      card.wrong = true;
+      shell.classList.add('checked','wrong');
+
+      if(currentMode === 'binary'){
+        const isHigher = target.value > card.value;
+        shell.setAttribute('aria-label', `${idx+1}番目のカード：ハズレ（${card.value}）`);
+        front.insertAdjacentHTML('beforeend',
+          `<div class="hint-badge ${isHigher ? 'up' : 'down'}">${isHigher ? '▲' : '▼'}</div>`);
+        messageEl.innerHTML = `ハズレ。${card.value} → 探している数はこれより<span class="highlight">${isHigher ? '大きい' : '小さい'}</span>です。（探索回数：${searchCount}回）`;
+      }else{
+        shell.setAttribute('aria-label', `${idx+1}番目のカード：ハズレ（${card.rank} ${card.suit}）`);
+        const remaining = cards.length - cards.filter(c=>c.revealed).length;
+        messageEl.innerHTML = `ハズレ。残り <span class="highlight">${remaining}枚</span> の中から探し続けよう。（探索回数：${searchCount}回）`;
+      }
+    }
+  }
+
+  function disableRemaining(){
+    Array.from(gridEl.children).forEach((shell, idx) => {
+      if(!cards[idx].revealed){
+        shell.classList.add('disabled');
+      }
+    });
+  }
+
+  document.getElementById('newGameBtn').addEventListener('click', startGame);
+
+  renderModeChips();
+  renderCountChips();
+  startGame();
+})();
+</script>
+</body>
+</html>
